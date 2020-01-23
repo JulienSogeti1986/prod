@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+
+kind: Deployment
+metadata:
+  name: app-server
+  labels:
+    app: app-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-server
+  template:
+    metadata:
+      labels:
+        app: app-server
+    spec:
+      containers:
+      - name: app-server
+        image: kilokilo8/app:latest
+        
+        ports:
+        - containerPort: 8080
+
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        - name: MYSQL_USER
+          value: julien
+        - name: MYSQL_PASSWORD
+          value: password
+        

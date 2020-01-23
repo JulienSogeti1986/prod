@@ -1,0 +1,133 @@
+---
+
+
+- name: ajout du Master Serveur avec Minikube
+
+  hosts: prodserver1
+  remote_user: root
+
+  tasks:
+
+  - block:
+
+    - name: set repository
+      become: true
+      shell: yum install -y yum-utils device-mapper-persistent-data lvm2
+     
+
+    - name: use stable repository
+      become: true
+      shell: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    
+    - name: installer docker engine
+      become: true
+      shell: yum install docker-ce docker-ce-cli containerd.io
+
+    - name: Start and Enable docker service
+      shell: systemctl enable docker; systemctl start docker
+      args:
+        executable:  /bin/bash
+      register: docker_enable
+      become: true
+
+
+    - name: check docker service status
+      shell:  systemctl status docker
+      args: 
+        executable: /bin/bash
+      register: docker_status
+      become: true
+      until: "'active' and 'running' in docker_status.stdout"
+      delay: 30
+      retries: 5
+       
+
+    
+
+    - name: Download minikube packages
+      shell: curl {{ item }}
+      args:
+        executable:  /bin/bash
+      become: true
+      with_items:
+        - -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        - -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+
+    - name: Change file permissions
+      shell: chmod +x minikube kubectl
+      become: true
+
+    - name: Move to the bin folder
+      shell:  mv minikube kubectl /usr/local/bin/
+      become: true
+
+    - name: Setup the directory for storing Minikube and kubectl configuration.
+      shell: mkdir $HOME/.kube || true
+      become: true
+
+    - name: Create empty file(config) under directory.
+      shell: touch $HOME/.kube/config
+      become: true
+
+    - name: copy these configuration  line
+      shell: |
+        echo 'export MINIKUBE_WANTUPDATENOTIFICATION=false' >> ~/.profile,
+        echo 'export MINIKUBE_WANTREPORTERRORPROMPT=false' >> ~/.profile
+        echo 'export MINIKUBE_HOME=$HOME' >> ~/.profile
+        echo 'export CHANGE_MINIKUBE_NONE_USER=true' >> ~/.profile
+        echo 'export KUBECONFIG=$HOME/.kube/config' >> ~/.profile
+      become: true
+
+    - name: ajouter minikube au PATH
+      shell: echo "export PATH=/usr/local/bin:$PATH" >> /etc/profile
+      become: true
+ 
+    - name: source
+      shell: source /etc/profile
+      become: true
+    
+    - name: creation répertoire pour les yml
+      become: true
+      file: 
+        path: /root/ymlrepository
+        state: directory
+        mode: '0755'
+
+    - name: aller dans le répertoire créé
+      become: true
+      shell: cd /root/ymlrepository
+
+    - name: copie des yml
+      become: true
+      copy: 
+        src: ./k8sDeploy/
+        dest: /root/ymlrepository/
+        mode: '0755'
+
+    - name: Start Minikube with option vm-driver=none
+      shell: minikube start --vm-driver=none
+      become: true
+
+
+    - name: After minikube configuration, we check minikube status
+      shell: minikube status
+      args:
+        executable: /bin/bash
+      register: minikube_status
+      become: true
+      until: "'minikube' and 'Running' in minikube_status.stdout"
+      delay: 30
+      retries: 10
+
+    - name: activation des yml
+      become: true
+      shell: kubectl apply -f {{ item }}
+      with_items:
+        - /root/ymlrepository/app.yml
+        - /root/ymlrepository/app_svc.yml
+        - /root/ymlrepository/db.yml
+        - /root/ymlrepository/db_svc.yml
+
+    
+
+  
